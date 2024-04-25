@@ -1,0 +1,44 @@
+JvMTECH:
+  WarmupCache:
+    basicauth:
+    #      login: ''
+    #      pass: ''
+
+    presets:
+
+      #      Example #1
+      #      We want to warmup only subpages that are linked to from home page
+      #      as we don't want to scan all insights or news
+      #      skipping mailto & _Resources links
+      'homepage':
+        urls:
+          - 'https://your.site/ch-de/pro/'
+          - 'https://your.site/ch-de/private/'
+        allowlist:
+        # if values specified only pages matching pattern will be whitelisted
+        denylist:
+          - '/mailto\:/i'  # to exclude all "mailto:" links
+          - '/\/_Resources\//i' # to exclude links containing "_Resources"
+      #        limit: 0
+
+      #      Example #2
+      #      Each shareclass page has 3 functional subpages that are not in sitemap,
+      #      but we want to have them cached - check addUrls section
+      'products':
+        sitemaps:
+          - 'https://your.site/ch-de/pro/sitemap.xml'
+          - 'https://your.site/ch-de/private/sitemap.xml'
+        allowlist:
+          - '/\/products\//i'
+        denylist:
+        limits: 0,0 # for each sitemap separated with comma (,)
+        addUrls: # links finishing with -currencySymbol are extended with subpages
+          '/prices.json': '/(-usd|-eur|-chf|-gbp)$/i'
+          '/productdocuments': '/(-usd|-eur|-chf|-gbp)$/i'
+
+Flowpack:
+  JobQueue:
+    Common:
+      queues:
+        'warmupcache':
+          className: 'Flowpack\JobQueue\Doctrine\Queue\DoctrineQueue' # or RedisQueue, BeanstalkdQueue, etc.

@@ -1,0 +1,27 @@
+{
+    "name": "jvmtech/warmupcache",
+    "description": "Wormup Neos CMS full static cache or fusion caches by crawling selected urls or websites.",
+    "type": "neos-package",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jung von Matt TECH",
+            "homepage": "https://jvmtech.ch",
+            "role": "Company"
+        }
+    ],
+    "require": {
+        "neos/flow": "^7.0 || ^8.0 || dev-master",
+        "flowpack/jobqueue-common": "^3.3.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "JvMTECH\\WarmupCache\\": "Classes/"
+        }
+    },
+    "extra": {
+        "neos": {
+            "package-key": "JvMTECH.WarmupCache"
+        }
+    }
+}
