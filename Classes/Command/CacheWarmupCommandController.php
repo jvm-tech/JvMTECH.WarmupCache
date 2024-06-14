@@ -10,6 +10,7 @@ use Neos\Flow\Cli\CommandController;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use GuzzleHttp\Exception\RequestException;
+use Neos\Flow\Core\Booting\Scripts;
 
 class CacheWarmupCommandController extends CommandController
 {
@@ -40,6 +41,12 @@ class CacheWarmupCommandController extends CommandController
      */
     protected $presets;
 
+    /**
+     * @Flow\InjectConfiguration(package="Neos.Flow")
+     * @var array
+     */
+    protected $flowSettings;
+
     protected function _getClientConfig():array
     {
         $clientConfig = [];
@@ -49,8 +56,48 @@ class CacheWarmupCommandController extends CommandController
     }
 
     /**
-     * Crawls urls to extract all hrefs.
+     * Run all in yaml configured presets.
      *
+     * @param bool $addToQueue
+     * @param bool $outputResults
+     * @return void
+     */
+    public function runAllPresetsCommand(bool $addToQueue = false, bool $outputResults = false)
+    {
+        $this->output->outputLine('Running all configured presets');
+
+        foreach ($this->presets as $presetName => $presetConfig) {
+            $commandIdentifier = '';
+            if (array_key_exists('sitemaps', $presetConfig)) {
+                $commandIdentifier = 'jvmtech.warmupcache:cachewarmup:extracturlsfromsitemap';
+            }
+
+            if (array_key_exists('urls', $presetConfig)) {
+                $commandIdentifier = 'jvmtech.warmupcache:cachewarmup:extracturls';
+            }
+
+            if ($commandIdentifier) {
+                $this->output->outputLine('Running preset: ' . $presetName . ' with command: ' . $commandIdentifier);
+
+                try {
+                    Scripts::executeCommand(
+                        $commandIdentifier,
+                        $this->flowSettings,
+                        $outputResults,
+                        ['preset' => $presetName, 'addToQueue' => $addToQueue]
+                    );
+                } catch (\Exception $e) {
+                    $this->outputLine('Error: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $this->output->outputLine('All configured presets run');
+    }
+
+    /**
+     * Crawls urls to extract all hrefs.
+     * *
      * @param string $preset Preset name with settings
      * @param string $urls The URLs list to crawl, separated with comma (,)
      * @param string $limits Limit extracted urls. Format: ,,2,5 - empty is 0.
@@ -58,7 +105,6 @@ class CacheWarmupCommandController extends CommandController
      * @param bool $siblings Extract links to siblings pages (& subpages).
      * @param bool $verbose If should return info about extracted urls.
      * @param bool $addToQueue If should add to queue.
-     *
      * @return void
      */
     public function extractUrlsCommand(string $preset='', string $urls='', string $limits = '', bool $subpages = false,
@@ -144,7 +190,6 @@ class CacheWarmupCommandController extends CommandController
     /**
      * Crawls the sitemaps to extract URLs.
      *
-
      * @param string $sitemaps The URL list of the sitemaps to crawl, separated with comma (,)
      * @param string $preset Preset name with settings
      * @param string $limits Limit extracted urls. Format: ,,2,5 - empty is 0.
@@ -217,11 +262,11 @@ class CacheWarmupCommandController extends CommandController
 
     /**
      * Extracts URLs from the sitemap content
-     *
-     * @param string $sitemapContent XML content of the sitemap
-     * @param string $sitemapContent XML content of the sitemap
-     * @param string $sitemapContent XML content of the sitemap
-     * @param string $sitemapContent XML content of the sitemap
+     * *
+     * @param string $sitemapContent
+     * @param array $whitelist
+     * @param array $blacklist
+     * @param int $limit
      * @return array An array of URLs
      */
     private function extractLinksFromSitemap(string $sitemapContent, array $whitelist = [], array $blacklist = [], int $limit = 0): array
@@ -269,9 +314,11 @@ class CacheWarmupCommandController extends CommandController
         return $acceptedLinks;
     }
 
-
-
-
+    /**
+     * @param string $limitsStr
+     * @param array $urls
+     * @return array
+     */
     private function _prepareLimits(string $limitsStr, array $urls): array
     {
         $limits = array_map(function($value){
@@ -283,12 +330,15 @@ class CacheWarmupCommandController extends CommandController
 
     /**
      * Parses the HTML content and extracts links, converting relative URLs to absolute.
-     * Filters out unwanted URLs based on specified criteria.
-     *
+     * * Filters out unwanted URLs based on specified criteria.
+     * *
      * @param string $html The HTML content to parse
      * @param string $base The base URL of the crawled webpage
      * @param array $whitelist List of allowed URL patterns
      * @param array $blacklist List of disallowed URL patterns
+     * @param int $limit
+     * @param bool $subpagesOnly
+     * @param bool $siblingsOnly
      * @return void
      */
     private function extractLinks(string $html, string $base, array $whitelist = [], array $blacklist = [], int $limit = 0, bool $subpagesOnly = false, bool $siblingsOnly = false): void
@@ -363,6 +413,10 @@ class CacheWarmupCommandController extends CommandController
         }
     }
 
+    /**
+     * @param string $url
+     * @return string
+     */
     function stripAnchorFromUrl(string $url): string
     {
         // Parse the URL to get its components
@@ -381,6 +435,10 @@ class CacheWarmupCommandController extends CommandController
         return $urlWithoutFragment;
     }
 
+    /**
+     * @param string $url
+     * @return string
+     */
     function getBaseUrl(string $url): string {
         // Parse the URL and return the scheme and host
         $parsedUrl = parse_url($url);
@@ -392,7 +450,7 @@ class CacheWarmupCommandController extends CommandController
 
     /**
      * Converts a relative URL to an absolute URL.
-     *
+     * *
      * @param string $url The URL to convert
      * @param string $base The base URL
      * @return string The absolute URL
@@ -417,7 +475,7 @@ class CacheWarmupCommandController extends CommandController
 
     /**
      * Determines if the link matches any pattern in the provided list.
-     *
+     * *
      * @param string $link The link to check
      * @param array $patterns List of patterns to match against
      * @return bool TRUE if link matches any pattern, FALSE otherwise
@@ -435,11 +493,10 @@ class CacheWarmupCommandController extends CommandController
 
     /**
      * Adds a subpage to each link in the list that matches a specific pattern.
-     *
+     * *
      * @param array $links The original list of links.
      * @param string $pattern The pattern to match for each link.
      * @param string $subpage The subpage to add to matching links.
-     *
      * @return array The updated list of links with added subpages for matches.
      */
     function addSubpageToMatchingLinks(array $links, string $pattern, string $subpage): array {
@@ -455,6 +512,11 @@ class CacheWarmupCommandController extends CommandController
         return $updatedLinks;
     }
 
+    /**
+     * @param array|null $settings
+     * @param array $_urls
+     * @return array
+     */
     function addSubpages(array $settings = null, array $_urls = []): array
     {
         $urls = $_urls;
